@@ -101,6 +101,11 @@ void AATBoxBlur(const std::vector<uint8>& AAT, const std::vector<uint32>& SAT, s
 	{
 		for (size_t ix = 0; ix < width; ++ix)
 		{
+			if (ix == 5 && iy == 5)
+			{
+				int ijkl = 0;
+			}
+
 			size_t startX = (ix < radius + 1) ? 0 : ix - radius - 1;
 			size_t startY = (iy < radius + 1) ? 0 : iy - radius - 1;
 
@@ -110,7 +115,7 @@ void AATBoxBlur(const std::vector<uint8>& AAT, const std::vector<uint32>& SAT, s
 			uint32 A = uint32(AAT[startY*width + startX]) * uint32((startY + 1)*(startX + 1));
 			uint32 B = uint32(AAT[startY*width + endX]) * uint32((startY + 1)*(endX + 1));
 			uint32 C = uint32(AAT[endY*width + startX]) * uint32((endY + 1)*(startX + 1));
-			uint32 D = uint32(AAT[endY*width + endX]) * uint32((endY + 1)*(startY + 1));
+			uint32 D = uint32(AAT[endY*width + endX]) * uint32((endY + 1)*(endX + 1));
 
 			uint32 SATA = SAT[startY*width + startX];
 			uint32 SATB = SAT[startY*width + endX];
@@ -171,10 +176,10 @@ void TestAATvsSAT(uint8* source, size_t width, size_t height, const char* baseFi
 	for (size_t index = 0; index < _countof(radiuses); ++index)
 	{
 		// regular box blur
-		//BoxBlur(source, width, height, radiuses[index], baseFileName);
+		BoxBlur(source, width, height, radiuses[index], baseFileName);
 
 		// box blur with SAT
-		//SATBoxBlur(SAT, width, height, radiuses[index], baseFileName);
+		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName);
 
 		// box blur with AAT
 		AATBoxBlur(AAT, SAT, width, height, radiuses[index], baseFileName);
@@ -212,6 +217,10 @@ int main(int argc, char** argv)
 
 /*
 TODO:
+* for AAT try not adding 0.5 to round?
+ * try noise?
+ * make sure numbers look good (they "do" so far but image is way bad)
+
 * fix box blur edges to look right. eg for regular box blur, maybe divide by the number of pixels that are in range, instead of by filter size always (dont assume it's black around border?).
  * that would make it like the SAT one
 
