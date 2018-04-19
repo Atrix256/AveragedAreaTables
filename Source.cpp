@@ -21,6 +21,28 @@ inline T SampleOrZero(T* data, size_t width, size_t height, int x, int y)
 	return data[y*width + x];
 }
 
+template <typename T>
+float AverageOfRectangle(T* data, int width, int height, int sx, int sy, int ex, int ey)
+{
+    sx = std::min(std::max(sx, 0), width - 1);
+    ex = std::min(std::max(ex, 0), width - 1);
+    sy = std::min(std::max(sy, 0), height - 1);
+    ey = std::min(std::max(ey, 0), height - 1);
+
+    float sum = 0.0f;
+    for (int iy = sy; iy <= ey; ++iy)
+    {
+        for (int ix = sx; ix <= ex; ++ix)
+        {
+            sum += float(data[iy*width+ix]);
+        }
+    }
+
+    float sampleCount = float(ey - sy + 1)*float(ex - sx + 1);
+
+    return sum / sampleCount;
+}
+
 void BoxBlur(const uint8* source, size_t width, size_t height, size_t radius, const char* baseFileName)
 {
 	std::vector<uint8> result;
@@ -32,17 +54,8 @@ void BoxBlur(const uint8* source, size_t width, size_t height, size_t radius, co
 	{
 		for (int ix = 0; ix < width; ++ix)
 		{
-			float sum = 0;
-
-			for (int filtery = -(int)radius; filtery <= (int)radius; ++filtery)
-			{
-				for (int filterx = -(int)radius; filterx <= (int)radius; ++filterx)
-				{
-					sum += (float)SampleOrZero(source, width, height, ix + filterx, iy + filtery);
-				}
-			}
-
-			result[iy*width + ix] = uint8(0.5f + sum / filterSize);
+            float average = AverageOfRectangle(source, (int)width, (int)height, ix - (int)radius, iy - (int)radius, ix + (int)radius, iy + (int)radius);
+            result[iy*width + ix] = uint8(0.5f + average);
 		}
 	}
 
@@ -171,7 +184,7 @@ void TestAATvsSAT(uint8* source, size_t width, size_t height, const char* baseFi
         }
     }
 
-	size_t radiuses[] = { 1, 5, 25 };
+	size_t radiuses[] = { 0, 1, 5, 25, 100 };
 
 	for (size_t index = 0; index < _countof(radiuses); ++index)
 	{
@@ -217,6 +230,10 @@ int main(int argc, char** argv)
 
 /*
 TODO:
+* the left and top of images (min side?) seem to be black on the sat images compared to regular box blurred images. investigate
+
+* multithread? make a std::list of std::function's or something, and have a multithreaded process run through them.
+
 * for AAT try not adding 0.5 to round?
  * try noise?
  * make sure numbers look good (they "do" so far but image is way bad)
