@@ -13,15 +13,6 @@ typedef uint16_t uint16;
 typedef uint32_t uint32;
 
 template <typename T>
-inline T SampleOrZero(T* data, size_t width, size_t height, int x, int y)
-{
-	if (x < 0 || y < 0 || x > width - 1 || y > height - 1)
-		return T(0);
-
-	return data[y*width + x];
-}
-
-template <typename T>
 float AverageOfRectangle(T* data, int width, int height, int sx, int sy, int ex, int ey)
 {
     sx = std::min(std::max(sx, 0), width - 1);
@@ -60,7 +51,7 @@ void BoxBlur(const uint8* source, int width, int height, int radius, const char*
 	}
 
 	char append[32];
-	sprintf_s(append, "_%i", int(radius));
+	sprintf_s(append, "_%i", radius);
 	char fileName[256];
 	sprintf_s(fileName, baseFileName, append);
 	stbi_write_png(fileName, width, height, 1, &result[0], width);
@@ -90,23 +81,21 @@ void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radiu
 
 			double size = double((endY - startY)*(endX - startX));
 
-			uint8 average = uint8(double(integratedValue) / size);
+			uint8 average = uint8(0.5f + double(integratedValue) / size);
 
 			result[iy*width + ix] = average;
 		}
 	}
 
 	char append[32];
-	sprintf_s(append, "_%i_SAT", int(radius));
+	sprintf_s(append, "_%i_SAT", radius);
 	char fileName[256];
 	sprintf_s(fileName, baseFileName, append);
 	stbi_write_png(fileName, width, height, 1, &result[0], width);
 }
 
-void AATBoxBlur(const std::vector<uint8>& AAT, const std::vector<uint32>& SAT, int width, int height, int radius, const char* baseFileName)
+void AATBoxBlur(const std::vector<uint32>& AAT, int width, int height, int radius, const char* baseFileName, bool isStochastic, int scale)
 {
-	// TODO: remove SAT parameter
-
 	std::vector<uint8> result;
 	result.resize(AAT.size());
 
@@ -114,42 +103,46 @@ void AATBoxBlur(const std::vector<uint8>& AAT, const std::vector<uint32>& SAT, i
 	{
 		for (int ix = 0; ix < width; ++ix)
 		{
-			if (ix == 5 && iy == 5)
-			{
-				int ijkl = 0;
-			}
-
 			int startX = std::max(ix - radius - 1, -1);
 			int startY = std::max(iy - radius - 1, -1);
 
 			int endX = std::min(ix + radius, width - 1);
 			int endY = std::min(iy + radius, height - 1);
 
-			uint32 A = (startX >= 0 && startY >= 0) ? uint32(AAT[startY*width + startX]) * uint32((startY + 1)*(startX + 1)) : 0;
-			uint32 B = (startY >= 0) ? uint32(AAT[startY*width + endX]) * uint32((startY + 1)*(endX + 1)) : 0;
-			uint32 C = (startX >= 0) ? uint32(AAT[endY*width + startX]) * uint32((endY + 1)*(startX + 1)) : 0;
-			uint32 D = uint32(AAT[endY*width + endX]) * uint32((endY + 1)*(endX + 1));
-
-			uint32 SATA = SAT[startY*width + startX];
-			uint32 SATB = SAT[startY*width + endX];
-			uint32 SATC = SAT[endY*width + startX];
-			uint32 SATD = SAT[endY*width + endX];
+			uint32 A = (startX >= 0 && startY >= 0) ? AAT[startY*width + startX] * uint32((startY + 1)*(startX + 1)) / uint32(scale) : 0;
+			uint32 B = (startY >= 0) ? AAT[startY*width + endX] * uint32((startY + 1)*(endX + 1)) / uint32(scale) : 0;
+			uint32 C = (startX >= 0) ? AAT[endY*width + startX] * uint32((endY + 1)*(startX + 1)) / uint32(scale) : 0;
+			uint32 D = AAT[endY*width + endX] * uint32((endY + 1)*(endX + 1)) / uint32(scale);
 
 			uint32 integratedValue = A + D - B - C;
 
 			double size = double((endY - startY)*(endX - startX));
 
-			uint8 average = uint8(double(integratedValue) / size);
+			uint8 average = uint8(0.5f + double(integratedValue) / size);
 
 			result[iy*width + ix] = average;
 		}
 	}
 
 	char append[32];
-	sprintf_s(append, "_%i_AAT", int(radius));
+	if (isStochastic)
+	{
+		if(scale > 1)
+			sprintf_s(append, "_%i_SAAT_%ix", radius, scale);
+		else
+			sprintf_s(append, "_%i_SAAT", radius);
+	}
+	else
+	{
+		if (scale > 1)
+			sprintf_s(append, "_%i_AAT_%ix", radius, scale);
+		else
+			sprintf_s(append, "_%i_AAT", radius);
+	}
+
 	char fileName[256];
 	sprintf_s(fileName, baseFileName, append);
-	stbi_write_png(fileName, (int)width, (int)height, 1, &result[0], (int)width);
+	stbi_write_png(fileName, width, height, 1, &result[0], width);
 }
 
 void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName)
@@ -171,21 +164,34 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
         }
     }
 
-    // make AAT
-    std::vector<uint8> AAT;
+    // make AAT, stochastic AAT, and scaled AATs
+    std::vector<uint32> AAT, SAAT, AAT4x, AAT16x, SAAT4x, SAAT16x;
 	AAT.resize(width*height);
+	SAAT.resize(width*height);
+	AAT4x.resize(width*height);
+	AAT16x.resize(width*height);
+	SAAT4x.resize(width*height);
+	SAAT16x.resize(width*height);
+	std::random_device rd;
+	std::mt19937 rng(rd());
+	std::uniform_real_distribution<float> dist(0, 1.0f);
     for (size_t iy = 0; iy < height; ++iy)
     {
         for (size_t ix = 0; ix < width; ++ix)
         {
             double value = double(SAT[iy*width + ix]);
 			double rangeSize = double((ix + 1)*(iy + 1));
-            AAT[iy*width + ix] = uint8((value / rangeSize) + 0.5f);
+			AAT[iy*width + ix] = uint32(0.5f + (value / rangeSize));  // 0 to 255 since the source is too
+			SAAT[iy*width + ix] = uint32(dist(rng) + (value / rangeSize)); // 0 to 255 since the source is too
+
+			AAT4x[iy*width + ix] = uint32(0.5f + 4.0f * (value / rangeSize));  // an extra 2 bits of precision
+			AAT16x[iy*width + ix] = uint32(0.5f + 16.0f * (value / rangeSize)); // an extra 4 bits of precision
+			SAAT4x[iy*width + ix] = uint32(dist(rng) + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and dithering
+			SAAT16x[iy*width + ix] = uint32(dist(rng) + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and dithering
         }
     }
 
-	// TODO: temp
-	int radiuses[] = { 0, 1, 5, 25 };//, 100 };
+	int radiuses[] = { 0, 1, 5, 25, 100 };
 
 	for (size_t index = 0; index < _countof(radiuses); ++index)
 	{
@@ -196,7 +202,18 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName);
 
 		// box blur with AAT
-		AATBoxBlur(AAT, SAT, width, height, radiuses[index], baseFileName);
+		AATBoxBlur(AAT, width, height, radiuses[index], baseFileName, false, 1);
+
+		// box blur with stochastic AAT
+		AATBoxBlur(SAAT, width, height, radiuses[index], baseFileName, true, 1);
+
+		// box blur with scaled AAT
+		AATBoxBlur(AAT4x, width, height, radiuses[index], baseFileName, false, 4);
+		AATBoxBlur(AAT16x, width, height, radiuses[index], baseFileName, false, 16);
+
+		// box blur with stochastic scaled AAT
+		AATBoxBlur(SAAT4x, width, height, radiuses[index], baseFileName, true, 4);
+		AATBoxBlur(SAAT16x, width, height, radiuses[index], baseFileName, true, 16);
 	}
 }
 
@@ -223,37 +240,17 @@ int main(int argc, char** argv)
 
 		TestAATvsSAT(&source[0], 1024, 1024, "out/rng%s.png");
 	}
-
-	// gradient test? pattern tests?
     
     return 0;
 }
 
 /*
 TODO:
-* the left and top of images (min side?) seem to be black on the sat images compared to regular box blurred images. investigate
 
-* multithread? make a std::list of std::function's or something, and have a multithreaded process run through them.
+* blue noise dither instead of white noise dither the stochastic aat?
 
-* for AAT try not adding 0.5 to round?
- * try noise?
- * make sure numbers look good (they "do" so far but image is way bad)
-
-* fix box blur edges to look right. eg for regular box blur, maybe divide by the number of pixels that are in range, instead of by filter size always (dont assume it's black around border?).
- * that would make it like the SAT one
-
-* and box blur using average area tables
-* u8 as source
-* show breakdown of float as well? esp f16 if you can.
-* try actual images as sources too
-* analyze visually (spit out images?), as well as numerically
-? is uint32 enough? it should be. log2(1204x1024) = 20, so 28 should be enough for that.
-
-* can add a scaling amount to add precision. aka if you have 2 extra bits to spare, you can multiply everything by 4.
-? dither before quantization?
-? show 16 bit floats too...http://half.sourceforge.net/
-
-Notes:
-* I guess losing fractional bits could be an issue because small fractions over large areas add up to big values
+* also try the thing with adding bits for specifix sized filters. show it breaking down. maybe a filter of 7x7 and a filter of 9x9, and add 6 more bits (handles 8x8 max)
+* show breakdown of float as well? esp f16 if you can. http://half.sourceforge.net/
+* analyze visually (spit out images?), as well as numerically?
 
 */
