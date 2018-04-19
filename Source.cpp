@@ -212,18 +212,21 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 
             double value = double(SAT[iy*width + ix]);
 			double rangeSize = double((ix + 1)*(iy + 1));
-			AAT[iy*width + ix] = uint32(0.5f + (value / rangeSize));  // 0 to 255 since the source is too
-			SAAT[iy*width + ix] = uint32(whiteNoise + (value / rangeSize)); // 0 to 255 since the source is too. + white noise dithering
-			SAATBlue[iy*width + ix] = uint32(blueNoise + (value / rangeSize)); // 0 to 255 since the source is too. + blue noise dithering
 
+            // rounding
+			AAT[iy*width + ix] = uint32(0.5f + (value / rangeSize)); 
 			AAT4x[iy*width + ix] = uint32(0.5f + 4.0f * (value / rangeSize));  // an extra 2 bits of precision (10 bit unorm)
 			AAT16x[iy*width + ix] = uint32(0.5f + 16.0f * (value / rangeSize)); // an extra 4 bits of precision (12 bit unorm)
 			AAT256x[iy*width + ix] = uint32(0.5f + 256.0f * (value / rangeSize)); // an extra 8 bits of precision (16 bit unorm)
 
+            // white noise dithering
+            SAAT[iy*width + ix] = uint32(whiteNoise + (value / rangeSize));
 			SAAT4x[iy*width + ix] = uint32(whiteNoise + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and white noise dithering
 			SAAT16x[iy*width + ix] = uint32(whiteNoise + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and white noise dithering
             SAAT256x[iy*width + ix] = uint32(whiteNoise + 256.0f * (value / rangeSize)); // an extra 8 bits of precision and white noise dithering
 
+            // blue noise dithering
+            SAATBlue[iy*width + ix] = uint32(blueNoise + (value / rangeSize));
 			SAATBlue4x[iy*width + ix] = uint32(blueNoise + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and blue noise dithering
 			SAATBlue16x[iy*width + ix] = uint32(blueNoise + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and blue noise dithering
             SAATBlue256x[iy*width + ix] = uint32(blueNoise + 256.0f * (value / rangeSize)); // an extra 8 bits of precision and blue noise dithering
@@ -293,6 +296,8 @@ int main(int argc, char** argv)
 
 /*
 TODO:
+
+? maybe name the AAT file based on the number of unorm bits?
 
 * also try the thing with adding bits for specific sized filters. show it breaking down. maybe a filter of 7x7 and a filter of 9x9, and add 6 more bits (handles 8x8 max)
 * scaled SAT's to lose low end bits instead of high
