@@ -112,7 +112,7 @@ void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radiu
 	stbi_write_png(fileName, width, height, 1, &result[0], width);
 }
 
-void AATBoxBlur(const std::vector<uint32>& AAT, int width, int height, int radius, const char* baseFileName, bool isStochastic, int scale, bool isBlue)
+void AATBoxBlur(const std::vector<uint32>& AAT, int width, int height, int radius, const char* baseFileName, const char* technique, int scale)
 {
 	std::vector<uint8> result;
 	result.resize(AAT.size());
@@ -155,30 +155,10 @@ void AATBoxBlur(const std::vector<uint32>& AAT, int width, int height, int radiu
 	}
 
 	char append[64];
-	if (isStochastic)
-	{
-		if (isBlue)
-		{
-			if (scale > 1)
-				sprintf_s(append, "_%i_SAAT_Blue_%ix", radius, scale);
-			else
-				sprintf_s(append, "_%i_SAAT_Blue", radius);
-		}
-		else
-		{
-			if (scale > 1)
-				sprintf_s(append, "_%i_SAAT_White_%ix", radius, scale);
-			else
-				sprintf_s(append, "_%i_SAAT_White", radius);
-		}
-	}
-	else
-	{
-		if (scale > 1)
-			sprintf_s(append, "_%i_AAT_%ix", radius, scale);
-		else
-			sprintf_s(append, "_%i_AAT", radius);
-	}
+    if (scale > 1)
+        sprintf_s(append, "_%i_%s_%ix", radius, technique, scale);
+    else
+        sprintf_s(append, "_%i_%s", radius, technique);
 
 	char fileName[256];
 	sprintf_s(fileName, baseFileName, append);
@@ -261,22 +241,22 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName);
 
 		// box blur with AAT
-        AATBoxBlur(AAT, width, height, radiuses[index], baseFileName, false, 1, false);
-		AATBoxBlur(AAT4x, width, height, radiuses[index], baseFileName, false, 4, false);
-		AATBoxBlur(AAT16x, width, height, radiuses[index], baseFileName, false, 16, false);
-		AATBoxBlur(AAT256x, width, height, radiuses[index], baseFileName, false, 256, false);
+        AATBoxBlur(AAT, width, height, radiuses[index], baseFileName, "AAT", 1);
+		AATBoxBlur(AAT4x, width, height, radiuses[index], baseFileName, "AAT", 4);
+		AATBoxBlur(AAT16x, width, height, radiuses[index], baseFileName, "AAT", 16);
+		AATBoxBlur(AAT256x, width, height, radiuses[index], baseFileName, "AAT", 256);
 
 		// box blur with white noise stochastically rounded AAT
-        AATBoxBlur(SAAT, width, height, radiuses[index], baseFileName, true, 1, false);
-		AATBoxBlur(SAAT4x, width, height, radiuses[index], baseFileName, true, 4, false);
-		AATBoxBlur(SAAT16x, width, height, radiuses[index], baseFileName, true, 16, false);
-        AATBoxBlur(SAAT256x, width, height, radiuses[index], baseFileName, true, 256, false);
+        AATBoxBlur(SAAT, width, height, radiuses[index], baseFileName, "AATWhite", 1);
+		AATBoxBlur(SAAT4x, width, height, radiuses[index], baseFileName, "AATWhite", 4);
+		AATBoxBlur(SAAT16x, width, height, radiuses[index], baseFileName, "AATWhite", 16);
+        AATBoxBlur(SAAT256x, width, height, radiuses[index], baseFileName, "AATWhite", 256);
 
         // box blur with blue noise stochastically rounded AAT
-        AATBoxBlur(SAATBlue, width, height, radiuses[index], baseFileName, true, 1, true);
-		AATBoxBlur(SAATBlue4x, width, height, radiuses[index], baseFileName, true, 4, true);
-		AATBoxBlur(SAATBlue16x, width, height, radiuses[index], baseFileName, true, 16, true);
-        AATBoxBlur(SAATBlue256x, width, height, radiuses[index], baseFileName, true, 256, true);
+        AATBoxBlur(SAATBlue, width, height, radiuses[index], baseFileName, "AATBlue", 1);
+		AATBoxBlur(SAATBlue4x, width, height, radiuses[index], baseFileName, "AATBlue", 4);
+		AATBoxBlur(SAATBlue16x, width, height, radiuses[index], baseFileName, "AATBlue", 16);
+        AATBoxBlur(SAATBlue256x, width, height, radiuses[index], baseFileName, "AATBlue", 256);
 	}
 }
 
