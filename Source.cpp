@@ -74,7 +74,7 @@ void BoxBlur(const uint8* source, int width, int height, int radius, const char*
     stbi_write_png(fileName, width, height, 1, &resultPong[0], width);
 }
 
-void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radius, const char* baseFileName)
+void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radius, const char* baseFileName, const char* technique, int scale)
 {
 	std::vector<uint8> result;
 	result.resize(SAT.size());
@@ -95,6 +95,7 @@ void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radiu
 			uint32 D = SAT[endY*width + endX];
 
 			uint32 integratedValue = A + D - B - C;
+            integratedValue *= scale;
 
 			double size = double((endY - startY)*(endX - startX));
 
@@ -104,8 +105,9 @@ void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radiu
 		}
 	}
 
-	char append[32];
-	sprintf_s(append, "_%i_SAT", radius);
+    char append[64];
+    sprintf_s(append, "_%i_%s_%ix", radius, technique, scale);
+
 	char fileName[256];
 	sprintf_s(fileName, baseFileName, append);
     printf("%s\n", fileName);
@@ -155,10 +157,7 @@ void AATBoxBlur(const std::vector<uint32>& AAT, int width, int height, int radiu
 	}
 
 	char append[64];
-    if (scale > 1)
-        sprintf_s(append, "_%i_%s_%ix", radius, technique, scale);
-    else
-        sprintf_s(append, "_%i_%s", radius, technique);
+    sprintf_s(append, "_%i_%s_%ix", radius, technique, scale);
 
 	char fileName[256];
 	sprintf_s(fileName, baseFileName, append);
@@ -168,13 +167,21 @@ void AATBoxBlur(const std::vector<uint32>& AAT, int width, int height, int radiu
 
 void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName)
 {
-    // make SAT
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::uniform_real_distribution<float> dist(0, 1.0f);
+
+    // make Summed Area Table
     std::vector<uint32> SAT;
     SAT.resize(width * height);
     for (size_t iy = 0; iy < height; ++iy)
     {
         for (size_t ix = 0; ix < width; ++ix)
         {
+            // tile the blue noise texture across the image to get blue noise random numbers per pixel. blue noise tiles well.
+            float blueNoise = float(g_blueNoisePixels[((iy%g_blueNoiseHeight) * g_blueNoiseWidth + (ix%g_blueNoiseWidth))*g_blueNoiseChannels]) / 255.0f;
+            float whiteNoise = dist(rng);
+
 			uint32 i_xy = uint32(source[iy*width + ix]);
 
 			uint32 I_xny = (ix > 0) ? SAT[iy*width + (ix - 1)] : 0;
@@ -185,8 +192,11 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
         }
     }
 
-    // make AAT, stochastic AAT, and scaled AATs
+    // make Averaged Area Tables (AATs) and other Summed Area Table variants
     std::vector<uint32> AAT, SAAT, SAATBlue, AAT4x, AAT16x, AAT256x, SAATBlue4x, SAATBlue16x, SAATBlue256x, SAAT4x, SAAT16x, SAAT256x;
+    std::vector<uint32> SAT4x, SAT16x, SAT256x;
+    std::vector<uint32> SATBlue4x, SATBlue16x, SATBlue256x;
+    std::vector<uint32> SATWhite4x, SATWhite16x, SATWhite256x;
 	AAT.resize(width*height);
 	SAAT.resize(width*height);
 	SAATBlue.resize(width*height);
@@ -199,9 +209,15 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 	SAATBlue4x.resize(width*height);
 	SAATBlue16x.resize(width*height);
     SAATBlue256x.resize(width*height);
-	std::random_device rd;
-	std::mt19937 rng(rd());
-	std::uniform_real_distribution<float> dist(0, 1.0f);
+    SAT4x.resize(width * height);
+    SAT16x.resize(width * height);
+    SAT256x.resize(width * height);
+    SATWhite4x.resize(width * height);
+    SATWhite16x.resize(width * height);
+    SATWhite256x.resize(width * height);
+    SATBlue4x.resize(width * height);
+    SATBlue16x.resize(width * height);
+    SATBlue256x.resize(width * height);
     for (size_t iy = 0; iy < height; ++iy)
     {
         for (size_t ix = 0; ix < width; ++ix)
@@ -212,6 +228,8 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 
             double value = double(SAT[iy*width + ix]);
 			double rangeSize = double((ix + 1)*(iy + 1));
+
+            // ------------------ AAT's ------------------
 
             // rounding
 			AAT[iy*width + ix] = uint32(0.5f + (value / rangeSize)); 
@@ -230,6 +248,25 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 			SAATBlue4x[iy*width + ix] = uint32(blueNoise + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and blue noise dithering
 			SAATBlue16x[iy*width + ix] = uint32(blueNoise + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and blue noise dithering
             SAATBlue256x[iy*width + ix] = uint32(blueNoise + 256.0f * (value / rangeSize)); // an extra 8 bits of precision and blue noise dithering
+
+            // ------------------ SAT's ------------------
+
+            // NOTE: doubles can exactly represent all uint32 integers
+
+            // rounding 
+            SAT4x[iy*width + ix] = uint32(0.5 + double(SAT[iy*width + ix]) / 4.0);
+            SAT16x[iy*width + ix] = uint32(0.5 + double(SAT[iy*width + ix]) / 16.0);
+            SAT256x[iy*width + ix] = uint32(0.5 + double(SAT[iy*width + ix]) / 256.0);
+
+            // white noise dithering 
+            SATWhite4x[iy*width + ix] = uint32(double(whiteNoise) + double(SAT[iy*width + ix]) / 4.0);
+            SATWhite16x[iy*width + ix] = uint32(double(whiteNoise) + double(SAT[iy*width + ix]) / 16.0);
+            SATWhite256x[iy*width + ix] = uint32(double(whiteNoise) + double(SAT[iy*width + ix]) / 256.0);
+
+            // blue noise dithering 
+            SATBlue4x[iy*width + ix] = uint32(double(blueNoise) + double(SAT[iy*width + ix]) / 4.0);
+            SATBlue16x[iy*width + ix] = uint32(double(blueNoise) + double(SAT[iy*width + ix]) / 16.0);
+            SATBlue256x[iy*width + ix] = uint32(double(blueNoise) + double(SAT[iy*width + ix]) / 256.0);
         }
     }
 
@@ -240,10 +277,23 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		// regular box blur of source image
 		BoxBlur(source, width, height, radiuses[index], baseFileName);
 
-		// box blur with SAT
-		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName);
+		// box blur with rounded SAT
+		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName, "SAT", 1);
+        SATBoxBlur(SAT4x, width, height, radiuses[index], baseFileName, "SAT", 4);
+        SATBoxBlur(SAT16x, width, height, radiuses[index], baseFileName, "SAT", 16);
+        SATBoxBlur(SAT256x, width, height, radiuses[index], baseFileName, "SAT", 256);
 
-		// box blur with AAT
+        // box blur with white noise stochastically rounded SAT
+        SATBoxBlur(SATWhite4x, width, height, radiuses[index], baseFileName, "SATWhite", 4);
+        SATBoxBlur(SATWhite16x, width, height, radiuses[index], baseFileName, "SATWhite", 16);
+        SATBoxBlur(SATWhite256x, width, height, radiuses[index], baseFileName, "SATWhite", 256);
+
+        // box blur with blue noise stochastically rounded SAT
+        SATBoxBlur(SATBlue4x, width, height, radiuses[index], baseFileName, "SATBlue", 4);
+        SATBoxBlur(SATBlue16x, width, height, radiuses[index], baseFileName, "SATBlue", 16);
+        SATBoxBlur(SATBlue256x, width, height, radiuses[index], baseFileName, "SATBlue", 256);
+
+		// box blur with rounded AAT
         AATBoxBlur(AAT, width, height, radiuses[index], baseFileName, "AAT", 1);
 		AATBoxBlur(AAT4x, width, height, radiuses[index], baseFileName, "AAT", 4);
 		AATBoxBlur(AAT16x, width, height, radiuses[index], baseFileName, "AAT", 16);
@@ -296,6 +346,12 @@ int main(int argc, char** argv)
 
 /*
 TODO:
+
+* make dithered versions of the SATs
+
+* try a more extreme version of scaled SAT to see where it breaks down
+
+* rename SAAT to AATWhite, and SAATBlue to AATBlue
 
 ? maybe name the AAT file based on the number of unorm bits?
 
