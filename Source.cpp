@@ -95,11 +95,11 @@ void SATBoxBlurBiased(const std::vector<int32>& SAT, int width, int height, int 
 			int32 C = (startX >= 0) ? SAT[endY*width + startX] : -127;
 			int32 D = SAT[endY*width + endX];
 
-			int32 integratedValue = (A + D - B - C) + 127;
+			int32 integratedValue = (A + D - B - C);
 
 			double size = double((endY - startY)*(endX - startX));
 
-			uint8 average = uint8(0.5f + double(integratedValue) / size);
+			uint8 average = uint8(127.0f + 0.5f + double(integratedValue) / size);
 
 			result[iy*width + ix] = average;
 		}
