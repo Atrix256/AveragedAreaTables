@@ -16,6 +16,11 @@ typedef int32_t int32;
 int g_blueNoiseWidth, g_blueNoiseHeight, g_blueNoiseChannels;
 stbi_uc* g_blueNoisePixels = nullptr;
 
+float Lerp(float A, float B, float t)
+{
+	return A * (1 - t) * B * t;
+}
+
 template <typename T>
 float AverageOfRectangle(T* data, int width, int height, int sx, int sy, int ex, int ey)
 {
@@ -75,7 +80,7 @@ void BoxBlur(const uint8* source, int width, int height, int radius, const char*
     stbi_write_png(fileName, width, height, 1, &resultPong[0], width);
 }
 
-void SATBoxBlurBiased(const std::vector<int32>& SAT, int width, int height, int radius, const char* baseFileName, const char* technique)
+void SATBoxBlurBiased(const std::vector<int32>& SAT, int width, int height, int radius, const char* baseFileName, const char* technique, int bias)
 {
 	std::vector<uint8> result;
 	result.resize(SAT.size());
@@ -90,16 +95,16 @@ void SATBoxBlurBiased(const std::vector<int32>& SAT, int width, int height, int 
 			int endX = std::min(ix + radius, width - 1);
 			int endY = std::min(iy + radius, height - 1);
 
-			int32 A = (startX >= 0 && startY >= 0) ? SAT[startY*width + startX] : -127;
-			int32 B = (startY >= 0) ? SAT[startY*width + endX] : -127;
-			int32 C = (startX >= 0) ? SAT[endY*width + startX] : -127;
+			int32 A = (startX >= 0 && startY >= 0) ? SAT[startY*width + startX] : bias;
+			int32 B = (startY >= 0) ? SAT[startY*width + endX] : -bias;
+			int32 C = (startX >= 0) ? SAT[endY*width + startX] : -bias;
 			int32 D = SAT[endY*width + endX];
 
 			int32 integratedValue = (A + D - B - C);
 
 			double size = double((endY - startY)*(endX - startX));
 
-			uint8 average = uint8(127.0f + 0.5f + double(integratedValue) / size);
+			uint8 average = uint8(float(bias) + 0.5f + double(integratedValue) / size);
 
 			result[iy*width + ix] = average;
 		}
@@ -211,11 +216,16 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
     std::mt19937 rng(rd());
     std::uniform_real_distribution<float> dist(0, 1.0f);
 
+	// calculate the average of the image so we know what to use as a bias
+	float imageAverage = 0.0f;
+	for (size_t index = 0, count = width * height; index < count; ++index)
+		imageAverage = Lerp(imageAverage, float(source[index]), 1.0f / float(index + 1));
+
     // make Summed Area Tables
     std::vector<uint32> SAT;
-	std::vector<int32> SATBiased;
+	std::vector<int32> SATBiased127;
     SAT.resize(width * height);
-	SATBiased.resize(width * height);
+	SATBiased127.resize(width * height);
     for (size_t iy = 0; iy < height; ++iy)
     {
         for (size_t ix = 0; ix < width; ++ix)
@@ -235,14 +245,38 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 			{
 				int32 i_xy = int32(source[iy*width + ix]) - 127;
 
-				int32 I_xny = (ix > 0) ? SATBiased[iy*width + (ix - 1)] : -127;
-				int32 I_xyn = (iy > 0) ? SATBiased[(iy - 1)*width + ix] : -127;
-				int32 I_xnyn = (ix > 0 && iy > 0) ? SATBiased[(iy - 1)*width + (ix - 1)] : -127;
+				int32 I_xny = (ix > 0) ? SATBiased127[iy*width + (ix - 1)] : - 127;
+				int32 I_xyn = (iy > 0) ? SATBiased127[(iy - 1)*width + ix] : - 127;
+				int32 I_xnyn = (ix > 0 && iy > 0) ? SATBiased127[(iy - 1)*width + (ix - 1)] : - 127;
 
-				SATBiased[iy*width + ix] = i_xy + I_xny + I_xyn - I_xnyn;
+				SATBiased127[iy*width + ix] = i_xy + I_xny + I_xyn - I_xnyn;
 			}
         }
     }
+
+	// get and write out max / min value in biased SAT
+	{
+		int32 SATBiased127Min = SATBiased127[0];
+		int32 SATBiased127Max = SATBiased127[0];
+		for (int32 v : SATBiased127)
+		{
+			SATBiased127Min = std::min(SATBiased127Min, v);
+			SATBiased127Max = std::max(SATBiased127Max, v);
+		}
+		uint32 SATMax = 0;
+		for (uint32 v : SAT)
+			SATMax = std::max(SATMax, v);
+		char fileName[256];
+		sprintf_s(fileName, baseFileName, "");
+		strcat_s(fileName, ".txt");
+		
+		FILE* file = nullptr;
+		fopen_s(&file, fileName, "w+t");
+		fprintf(file, "SAT Max: %u (%i bits)\n", SATMax, int(std::ceilf(std::log2f(float(SATMax)))));
+		fprintf(file, "Biased 127 Min = %i (%i bits)\n", SATBiased127Min, int(std::ceilf(1.0f + std::log2f(std::fabsf(float(SATBiased127Min))))));
+		fprintf(file, "Biased 127 Max = %i (%i bits)\n", SATBiased127Max, int(std::ceilf(1.0f + std::log2f(std::fabsf(float(SATBiased127Max))))));
+		fclose(file);
+	}
 
     // make Averaged Area Tables (AATs) and other Summed Area Table variants
     std::vector<uint32> AAT, SAAT, SAATBlue, AAT4x, AAT16x, AAT256x, SAATBlue4x, SAATBlue16x, SAATBlue256x, SAAT4x, SAAT16x, SAAT256x;
@@ -330,7 +364,7 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		BoxBlur(source, width, height, radiuses[index], baseFileName);
 
 		// box blur with biased SAT
-		SATBoxBlurBiased(SATBiased, width, height, radiuses[index], baseFileName, "SATBiased");
+		SATBoxBlurBiased(SATBiased127, width, height, radiuses[index], baseFileName, "SATBiased127", 127);
 
 		// box blur with rounded SAT
 		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName, "SAT", 1);
@@ -402,8 +436,15 @@ int main(int argc, char** argv)
 /*
 TODO:
 
+
+
+
+* write out how many bits needed in txt files (ciel log2)
+* make a biased SAT that calculates an optimal bias (WIP)
+
 * continue with biased SAT.
  * does biased AAT make sense? i think it might not...
+ * it might... averages could be smaller magnitude... which would let you use scaling to get some fractional bits?
 
 * try a biased SAT (and AAT?) to see how much that helps
 * that thing about a low res SAT (bilinearly interpolated) with a high res one giving offsets

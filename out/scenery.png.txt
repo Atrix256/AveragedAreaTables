@@ -1,0 +1,3 @@
+SAT Max: 40474466 (26 bits)
+Biased 127 Min = -4985597 (24 bits)
+Biased 127 Max = 334821 (20 bits)
