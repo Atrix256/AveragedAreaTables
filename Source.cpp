@@ -11,6 +11,7 @@
 typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
+typedef int32_t int32;
 
 int g_blueNoiseWidth, g_blueNoiseHeight, g_blueNoiseChannels;
 stbi_uc* g_blueNoisePixels = nullptr;
@@ -72,6 +73,45 @@ void BoxBlur(const uint8* source, int width, int height, int radius, const char*
     sprintf_s(fileName, baseFileName, append);
     printf("%s\n", fileName);
     stbi_write_png(fileName, width, height, 1, &resultPong[0], width);
+}
+
+void SATBoxBlurBiased(const std::vector<int32>& SAT, int width, int height, int radius, const char* baseFileName, const char* technique)
+{
+	std::vector<uint8> result;
+	result.resize(SAT.size());
+
+	for (int iy = 0; iy < height; ++iy)
+	{
+		for (int ix = 0; ix < width; ++ix)
+		{
+			int startX = std::max(ix - radius - 1, -1);
+			int startY = std::max(iy - radius - 1, -1);
+
+			int endX = std::min(ix + radius, width - 1);
+			int endY = std::min(iy + radius, height - 1);
+
+			int32 A = (startX >= 0 && startY >= 0) ? SAT[startY*width + startX] : 0;
+			int32 B = (startY >= 0) ? SAT[startY*width + endX] : 0;
+			int32 C = (startX >= 0) ? SAT[endY*width + startX] : 0;
+			int32 D = SAT[endY*width + endX];
+
+			int32 integratedValue = (A + D - B - C) + 127;
+
+			double size = double((endY - startY)*(endX - startX));
+
+			uint8 average = uint8(0.5f + double(integratedValue) / size);
+
+			result[iy*width + ix] = average;
+		}
+	}
+
+    char append[64];
+    sprintf_s(append, "_%i_%s", radius, technique);
+
+	char fileName[256];
+	sprintf_s(fileName, baseFileName, append);
+    printf("%s\n", fileName);
+	stbi_write_png(fileName, width, height, 1, &result[0], width);
 }
 
 void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radius, const char* baseFileName, const char* technique, int scale)
@@ -171,20 +211,36 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
     std::mt19937 rng(rd());
     std::uniform_real_distribution<float> dist(0, 1.0f);
 
-    // make Summed Area Table
+    // make Summed Area Tables
     std::vector<uint32> SAT;
+	std::vector<int32> SATBiased;
     SAT.resize(width * height);
+	SATBiased.resize(width * height);
     for (size_t iy = 0; iy < height; ++iy)
     {
         for (size_t ix = 0; ix < width; ++ix)
         {
-			uint32 i_xy = uint32(source[iy*width + ix]);
+			// make SAT
+			{
+				uint32 i_xy = uint32(source[iy*width + ix]);
 
-			uint32 I_xny = (ix > 0) ? SAT[iy*width + (ix - 1)] : 0;
-			uint32 I_xyn = (iy > 0) ? SAT[(iy - 1)*width + ix] : 0;
-			uint32 I_xnyn = (ix > 0 && iy > 0) ? SAT[(iy - 1)*width + (ix - 1)] : 0;
+				uint32 I_xny = (ix > 0) ? SAT[iy*width + (ix - 1)] : 0;
+				uint32 I_xyn = (iy > 0) ? SAT[(iy - 1)*width + ix] : 0;
+				uint32 I_xnyn = (ix > 0 && iy > 0) ? SAT[(iy - 1)*width + (ix - 1)] : 0;
 
-			SAT[iy*width + ix] = i_xy + I_xny + I_xyn - I_xnyn;
+				SAT[iy*width + ix] = i_xy + I_xny + I_xyn - I_xnyn;
+			}
+
+			// make biased SAT
+			{
+				int32 i_xy = int32(source[iy*width + ix]) - 127;
+
+				int32 I_xny = (ix > 0) ? SATBiased[iy*width + (ix - 1)] : 0;
+				int32 I_xyn = (iy > 0) ? SATBiased[(iy - 1)*width + ix] : 0;
+				int32 I_xnyn = (ix > 0 && iy > 0) ? SATBiased[(iy - 1)*width + (ix - 1)] : 0;
+
+				SATBiased[iy*width + ix] = i_xy + I_xny + I_xyn - I_xnyn;
+			}
         }
     }
 
@@ -273,6 +329,9 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		// regular box blur of source image
 		BoxBlur(source, width, height, radiuses[index], baseFileName);
 
+		// box blur with biased SAT
+		SATBoxBlurBiased(SATBiased, width, height, radiuses[index], baseFileName, "SATBiased");
+
 		// box blur with rounded SAT
 		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName, "SAT", 1);
         SATBoxBlur(SAT4x, width, height, radiuses[index], baseFileName, "SAT", 4);
@@ -342,6 +401,9 @@ int main(int argc, char** argv)
 
 /*
 TODO:
+
+* continue with biased SAT.
+ * does biased AAT make sense? i think it might not...
 
 * try a biased SAT (and AAT?) to see how much that helps
 * that thing about a low res SAT (bilinearly interpolated) with a high res one giving offsets
