@@ -269,22 +269,24 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 	}
 
     // make Averaged Area Tables (AATs) and other Summed Area Table variants
-    std::vector<uint32> AAT, SAAT, SAATBlue, AAT4x, AAT16x, AAT256x, SAATBlue4x, SAATBlue16x, SAATBlue256x, SAAT4x, SAAT16x, SAAT256x;
+    std::vector<uint32> AAT, AAT4x, AAT16x, AAT256x;
+	std::vector<uint32> AATBlue, AATBlue4x, AATBlue16x, AATBlue256x;
+	std::vector<uint32> AATWhite, AATWhite4x, AATWhite16x, AATWhite256x;
     std::vector<uint32> SAT4x, SAT16x, SAT256x;
     std::vector<uint32> SATBlue4x, SATBlue16x, SATBlue256x;
     std::vector<uint32> SATWhite4x, SATWhite16x, SATWhite256x;
 	AAT.resize(width*height);
-	SAAT.resize(width*height);
-	SAATBlue.resize(width*height);
+	AATWhite.resize(width*height);
+	AATBlue.resize(width*height);
 	AAT4x.resize(width*height);
 	AAT16x.resize(width*height);
 	AAT256x.resize(width*height);
-	SAAT4x.resize(width*height);
-	SAAT16x.resize(width*height);
-    SAAT256x.resize(width*height);
-	SAATBlue4x.resize(width*height);
-	SAATBlue16x.resize(width*height);
-    SAATBlue256x.resize(width*height);
+	AATWhite4x.resize(width*height);
+	AATWhite16x.resize(width*height);
+    AATWhite256x.resize(width*height);
+	AATBlue4x.resize(width*height);
+	AATBlue16x.resize(width*height);
+    AATBlue256x.resize(width*height);
     SAT4x.resize(width * height);
     SAT16x.resize(width * height);
     SAT256x.resize(width * height);
@@ -314,16 +316,16 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 			AAT256x[iy*width + ix] = uint32(0.5f + 256.0f * (value / rangeSize)); // an extra 8 bits of precision (16 bit unorm)
 
             // white noise dithering
-            SAAT[iy*width + ix] = uint32(whiteNoise + (value / rangeSize));
-			SAAT4x[iy*width + ix] = uint32(whiteNoise + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and white noise dithering
-			SAAT16x[iy*width + ix] = uint32(whiteNoise + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and white noise dithering
-            SAAT256x[iy*width + ix] = uint32(whiteNoise + 256.0f * (value / rangeSize)); // an extra 8 bits of precision and white noise dithering
+            AATWhite[iy*width + ix] = uint32(whiteNoise + (value / rangeSize));
+			AATWhite4x[iy*width + ix] = uint32(whiteNoise + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and white noise dithering
+			AATWhite16x[iy*width + ix] = uint32(whiteNoise + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and white noise dithering
+            AATWhite256x[iy*width + ix] = uint32(whiteNoise + 256.0f * (value / rangeSize)); // an extra 8 bits of precision and white noise dithering
 
             // blue noise dithering
-            SAATBlue[iy*width + ix] = uint32(blueNoise + (value / rangeSize));
-			SAATBlue4x[iy*width + ix] = uint32(blueNoise + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and blue noise dithering
-			SAATBlue16x[iy*width + ix] = uint32(blueNoise + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and blue noise dithering
-            SAATBlue256x[iy*width + ix] = uint32(blueNoise + 256.0f * (value / rangeSize)); // an extra 8 bits of precision and blue noise dithering
+            AATBlue[iy*width + ix] = uint32(blueNoise + (value / rangeSize));
+			AATBlue4x[iy*width + ix] = uint32(blueNoise + 4.0f * (value / rangeSize)); // an extra 2 bits of precision and blue noise dithering
+			AATBlue16x[iy*width + ix] = uint32(blueNoise + 16.0f * (value / rangeSize)); // an extra 4 bits of precision and blue noise dithering
+            AATBlue256x[iy*width + ix] = uint32(blueNoise + 256.0f * (value / rangeSize)); // an extra 8 bits of precision and blue noise dithering
 
             // ------------------ SAT's ------------------
 
@@ -379,16 +381,16 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		AATBoxBlur(AAT256x, width, height, radiuses[index], baseFileName, "AAT", 256);
 
 		// box blur with white noise stochastically rounded AAT
-        AATBoxBlur(SAAT, width, height, radiuses[index], baseFileName, "AATWhite", 1);
-		AATBoxBlur(SAAT4x, width, height, radiuses[index], baseFileName, "AATWhite", 4);
-		AATBoxBlur(SAAT16x, width, height, radiuses[index], baseFileName, "AATWhite", 16);
-        AATBoxBlur(SAAT256x, width, height, radiuses[index], baseFileName, "AATWhite", 256);
+        AATBoxBlur(AATWhite, width, height, radiuses[index], baseFileName, "AATWhite", 1);
+		AATBoxBlur(AATWhite4x, width, height, radiuses[index], baseFileName, "AATWhite", 4);
+		AATBoxBlur(AATWhite16x, width, height, radiuses[index], baseFileName, "AATWhite", 16);
+        AATBoxBlur(AATWhite256x, width, height, radiuses[index], baseFileName, "AATWhite", 256);
 
         // box blur with blue noise stochastically rounded AAT
-        AATBoxBlur(SAATBlue, width, height, radiuses[index], baseFileName, "AATBlue", 1);
-		AATBoxBlur(SAATBlue4x, width, height, radiuses[index], baseFileName, "AATBlue", 4);
-		AATBoxBlur(SAATBlue16x, width, height, radiuses[index], baseFileName, "AATBlue", 16);
-        AATBoxBlur(SAATBlue256x, width, height, radiuses[index], baseFileName, "AATBlue", 256);
+        AATBoxBlur(AATBlue, width, height, radiuses[index], baseFileName, "AATBlue", 1);
+		AATBoxBlur(AATBlue4x, width, height, radiuses[index], baseFileName, "AATBlue", 4);
+		AATBoxBlur(AATBlue16x, width, height, radiuses[index], baseFileName, "AATBlue", 16);
+        AATBoxBlur(AATBlue256x, width, height, radiuses[index], baseFileName, "AATBlue", 256);
 	}
 }
 
@@ -431,10 +433,6 @@ TODO:
 * that thing about a low res SAT (bilinearly interpolated) with a high res one giving offsets
  * make sure you understand what things need to be what sizes and bit depths
 
-* rename SAAT to AATWhite, and SAATBlue to AATBlue
-
-? maybe name the AAT file based on the number of unorm bits?
-
 
 
 
@@ -443,6 +441,7 @@ TODO:
 * analyze visually (spit out images?), as well as numerically if there is anything that seems worth doing that? could also do a scaled(?) image diff.
 
 ? it seems like we may still be getting overflow, even though we are working with floats. investigate before making blog post w/ final images etc.
+ * esp on the 16 bit unorm that sebastien was curious about?
 
 ? make SATBoxBlur work in floats too, to be consistent with AAT / shaders stuff... but it's like a u32 unorm when not applying scale... probably need to convert via double.
 
