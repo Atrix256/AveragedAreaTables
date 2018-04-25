@@ -90,9 +90,9 @@ void SATBoxBlurBiased(const std::vector<int32>& SAT, int width, int height, int 
 			int endX = std::min(ix + radius, width - 1);
 			int endY = std::min(iy + radius, height - 1);
 
-			int32 A = (startX >= 0 && startY >= 0) ? SAT[startY*width + startX] : 0;
-			int32 B = (startY >= 0) ? SAT[startY*width + endX] : 0;
-			int32 C = (startX >= 0) ? SAT[endY*width + startX] : 0;
+			int32 A = (startX >= 0 && startY >= 0) ? SAT[startY*width + startX] : -127;
+			int32 B = (startY >= 0) ? SAT[startY*width + endX] : -127;
+			int32 C = (startX >= 0) ? SAT[endY*width + startX] : -127;
 			int32 D = SAT[endY*width + endX];
 
 			int32 integratedValue = (A + D - B - C) + 127;
@@ -235,9 +235,9 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 			{
 				int32 i_xy = int32(source[iy*width + ix]) - 127;
 
-				int32 I_xny = (ix > 0) ? SATBiased[iy*width + (ix - 1)] : 0;
-				int32 I_xyn = (iy > 0) ? SATBiased[(iy - 1)*width + ix] : 0;
-				int32 I_xnyn = (ix > 0 && iy > 0) ? SATBiased[(iy - 1)*width + (ix - 1)] : 0;
+				int32 I_xny = (ix > 0) ? SATBiased[iy*width + (ix - 1)] : -127;
+				int32 I_xyn = (iy > 0) ? SATBiased[(iy - 1)*width + ix] : -127;
+				int32 I_xnyn = (ix > 0 && iy > 0) ? SATBiased[(iy - 1)*width + (ix - 1)] : -127;
 
 				SATBiased[iy*width + ix] = i_xy + I_xny + I_xyn - I_xnyn;
 			}
