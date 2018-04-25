@@ -16,11 +16,6 @@ typedef int32_t int32;
 int g_blueNoiseWidth, g_blueNoiseHeight, g_blueNoiseChannels;
 stbi_uc* g_blueNoisePixels = nullptr;
 
-float Lerp(float A, float B, float t)
-{
-	return A * (1 - t) * B * t;
-}
-
 template <typename T>
 float AverageOfRectangle(T* data, int width, int height, int sx, int sy, int ex, int ey)
 {
@@ -215,11 +210,6 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
     std::random_device rd;
     std::mt19937 rng(rd());
     std::uniform_real_distribution<float> dist(0, 1.0f);
-
-	// calculate the average of the image so we know what to use as a bias
-	float imageAverage = 0.0f;
-	for (size_t index = 0, count = width * height; index < count; ++index)
-		imageAverage = Lerp(imageAverage, float(source[index]), 1.0f / float(index + 1));
 
     // make Summed Area Tables
     std::vector<uint32> SAT;
@@ -436,28 +426,17 @@ int main(int argc, char** argv)
 /*
 TODO:
 
+* try the thing with adding bits for specific sized filters and allowing overflow. show it breaking down. maybe a filter of 7x7 and a filter of 9x9, and add 6 more bits (handles 8x8 max)
 
-
-
-* write out how many bits needed in txt files (ciel log2)
-* make a biased SAT that calculates an optimal bias (WIP)
-
-* continue with biased SAT.
- * does biased AAT make sense? i think it might not...
- * it might... averages could be smaller magnitude... which would let you use scaling to get some fractional bits?
-
-* try a biased SAT (and AAT?) to see how much that helps
 * that thing about a low res SAT (bilinearly interpolated) with a high res one giving offsets
-
-
-* try a more extreme version of scaled SAT to see where it breaks down
+ * make sure you understand what things need to be what sizes and bit depths
 
 * rename SAAT to AATWhite, and SAATBlue to AATBlue
 
 ? maybe name the AAT file based on the number of unorm bits?
 
-* also try the thing with adding bits for specific sized filters. show it breaking down. maybe a filter of 7x7 and a filter of 9x9, and add 6 more bits (handles 8x8 max)
-* scaled SAT's to lose low end bits instead of high
+
+
 
 * show breakdown of float as well? esp f16 if you can. http://half.sourceforge.net/
 
@@ -479,5 +458,15 @@ TODO:
   * idea is something like have a lower resolution SAT, with higher resolution SAT describing the details missing. Like a bilinear data fit, and then the missing details in the higher resolution details.
   * if doing mips, could have each mip describe data only to amount of detail needed. each higher res mip adds higher frequencies not missed by the previous mip. 
  * could do tiling testing: https://twitter.com/JonOlick/status/986980257164152832
+
+
+
+ Blog notes:
+ * scaled SAT's to lose low end bits instead of high.
+  * If you know a minimum filter size, this can use fewer bits
+  * but, if you can get away with this, you really should just shrink your source texture.
+* If you know maximum size, you can allow rollover for sizes above that.
+ * these 2 things let you squeeze the bits a bit.
+
 
 */
