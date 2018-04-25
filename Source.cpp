@@ -178,10 +178,6 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
     {
         for (size_t ix = 0; ix < width; ++ix)
         {
-            // tile the blue noise texture across the image to get blue noise random numbers per pixel. blue noise tiles well.
-            float blueNoise = float(g_blueNoisePixels[((iy%g_blueNoiseHeight) * g_blueNoiseWidth + (ix%g_blueNoiseWidth))*g_blueNoiseChannels]) / 255.0f;
-            float whiteNoise = dist(rng);
-
 			uint32 i_xy = uint32(source[iy*width + ix]);
 
 			uint32 I_xny = (ix > 0) ? SAT[iy*width + (ix - 1)] : 0;
