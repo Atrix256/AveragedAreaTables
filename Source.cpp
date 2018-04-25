@@ -468,4 +468,9 @@ TODO:
  * these 2 things let you squeeze the bits a bit.
 
 
+ links:
+
+ SAT and IBL: http://www.cs.unc.edu/techreports/06-017.pdf
+
+
 */
