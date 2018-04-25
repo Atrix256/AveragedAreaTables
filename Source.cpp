@@ -347,7 +347,9 @@ int main(int argc, char** argv)
 /*
 TODO:
 
-* make dithered versions of the SATs
+* try a biased SAT (and AAT?) to see how much that helps
+* that thing about a low res SAT (bilinearly interpolated) with a high res one giving offsets
+
 
 * try a more extreme version of scaled SAT to see where it breaks down
 
