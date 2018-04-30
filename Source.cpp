@@ -114,15 +114,23 @@ void SATBoxBlurBiased(const std::vector<int32>& SAT, int width, int height, int 
 	stbi_write_png(fileName, width, height, 1, &result[0], width);
 }
 
-void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radius, const char* baseFileName, const char* technique, int scale)
+void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radius, const char* baseFileName, const char* technique, int scale, int numBits)
 {
 	std::vector<uint8> result;
 	result.resize(SAT.size());
+
+	uint32 maxValue = numBits == 32 ? uint32(-1) : uint32(1 << numBits) - 1;
 
 	for (int iy = 0; iy < height; ++iy)
 	{
 		for (int ix = 0; ix < width; ++ix)
 		{
+			if (ix > 3 && iy > 3)
+			{
+				int ijkl = 0;
+				(void)ijkl;
+			}
+
 			int startX = std::max(ix - radius - 1, -1);
 			int startY = std::max(iy - radius - 1, -1);
 
@@ -134,12 +142,38 @@ void SATBoxBlur(const std::vector<uint32>& SAT, int width, int height, int radiu
 			uint32 C = (startX >= 0) ? SAT[endY*width + startX] : 0;
 			uint32 D = SAT[endY*width + endX];
 
+			A &= maxValue;
+			B &= maxValue;
+			C &= maxValue;
+			D &= maxValue;
+
+			// TODO: should we do it as float? i feel like "yes" because shaders will do that, but i don't think the wrap around works there? dunno...
+#if 0
+			// Note that double can perfectly represent any uint32, but it's a float when a shader gets it
+			float fA = float(double(A) / double(maxValue));
+			float fB = float(double(B) / double(maxValue));
+			float fC = float(double(C) / double(maxValue));
+			float fD = float(double(D) / double(maxValue));
+
+			fA *= float(scale);
+			fB *= float(scale);
+			fC *= float(scale);
+			fD *= float(scale);
+
+			float integratedValue = fA + fD - fB - fC;
+
+			float size = float((endY - startY)*(endX - startX));
+
+			uint8 average = uint8(0.5 + double(maxValue) * double(integratedValue / size));
+#else
 			uint32 integratedValue = A + D - B - C;
-            integratedValue *= scale;
+			integratedValue *= scale;
+			integratedValue &= maxValue;
 
-			double size = double((endY - startY)*(endX - startX));
+			float size = float((endY - startY)*(endX - startX));
 
-			uint8 average = uint8(0.5f + double(integratedValue) / size);
+			uint8 average = uint8(0.5 + double(integratedValue) / double(size));
+#endif
 
 			result[iy*width + ix] = average;
 		}
@@ -359,20 +393,20 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		SATBoxBlurBiased(SATBiased127, width, height, radiuses[index], baseFileName, "SATBiased127", 127);
 
 		// box blur with rounded SAT
-		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName, "SAT", 1);
-        SATBoxBlur(SAT4x, width, height, radiuses[index], baseFileName, "SAT", 4);
-        SATBoxBlur(SAT16x, width, height, radiuses[index], baseFileName, "SAT", 16);
-        SATBoxBlur(SAT256x, width, height, radiuses[index], baseFileName, "SAT", 256);
+		SATBoxBlur(SAT, width, height, radiuses[index], baseFileName, "SAT", 1, 32);
+        SATBoxBlur(SAT4x, width, height, radiuses[index], baseFileName, "SAT", 4, 32);
+        SATBoxBlur(SAT16x, width, height, radiuses[index], baseFileName, "SAT", 16, 32);
+        SATBoxBlur(SAT256x, width, height, radiuses[index], baseFileName, "SAT", 256, 32);
 
         // box blur with white noise stochastically rounded SAT
-        SATBoxBlur(SATWhite4x, width, height, radiuses[index], baseFileName, "SATWhite", 4);
-        SATBoxBlur(SATWhite16x, width, height, radiuses[index], baseFileName, "SATWhite", 16);
-        SATBoxBlur(SATWhite256x, width, height, radiuses[index], baseFileName, "SATWhite", 256);
+        SATBoxBlur(SATWhite4x, width, height, radiuses[index], baseFileName, "SATWhite", 4, 32);
+        SATBoxBlur(SATWhite16x, width, height, radiuses[index], baseFileName, "SATWhite", 16, 32);
+        SATBoxBlur(SATWhite256x, width, height, radiuses[index], baseFileName, "SATWhite", 256, 32);
 
         // box blur with blue noise stochastically rounded SAT
-        SATBoxBlur(SATBlue4x, width, height, radiuses[index], baseFileName, "SATBlue", 4);
-        SATBoxBlur(SATBlue16x, width, height, radiuses[index], baseFileName, "SATBlue", 16);
-        SATBoxBlur(SATBlue256x, width, height, radiuses[index], baseFileName, "SATBlue", 256);
+        SATBoxBlur(SATBlue4x, width, height, radiuses[index], baseFileName, "SATBlue", 4, 32);
+        SATBoxBlur(SATBlue16x, width, height, radiuses[index], baseFileName, "SATBlue", 16, 32);
+        SATBoxBlur(SATBlue256x, width, height, radiuses[index], baseFileName, "SATBlue", 256, 32);
 
 		// box blur with rounded AAT
         AATBoxBlur(AAT, width, height, radiuses[index], baseFileName, "AAT", 1);
@@ -392,6 +426,12 @@ void TestAATvsSAT(uint8* source, int width, int height, const char* baseFileName
 		AATBoxBlur(AATBlue16x, width, height, radiuses[index], baseFileName, "AATBlue", 16);
         AATBoxBlur(AATBlue256x, width, height, radiuses[index], baseFileName, "AATBlue", 256);
 	}
+
+	// do a 7x7 and a 9x9 box blur with the 14 bit SAT. 7x7 should be fine. 9x9 should not be.
+	SATBoxBlur(SAT, width, height, 1, baseFileName, "SAT14bit", 1, 14);
+	SATBoxBlur(SAT, width, height, 2, baseFileName, "SAT14bit", 1, 14);
+	SATBoxBlur(SAT, width, height, 3, baseFileName, "SAT14bit", 1, 14);
+	SATBoxBlur(SAT, width, height, 4, baseFileName, "SAT14bit", 1, 14);
 }
 
 int main(int argc, char** argv)
@@ -406,7 +446,9 @@ int main(int argc, char** argv)
 		stbi_image_free(pixels);
 	}
 
+	// TODO: activate this again
 	// random number test
+	/*
 	{
 		std::random_device rd;
 		std::mt19937 rng(rd());
@@ -419,6 +461,7 @@ int main(int argc, char** argv)
 
 		TestAATvsSAT(&source[0], 1024, 1024, "out/rng%s.png");
 	}
+	*/
 
 	stbi_image_free(g_blueNoisePixels);
     
@@ -428,7 +471,12 @@ int main(int argc, char** argv)
 /*
 TODO:
 
+* i think you should make functions to do conversions: UNORMToFloat and floatToUNORM
+
+* sat biased doesn't look right in pixel row / column 0. see why? maybe you aren't adding bias anymore...
+
 * try the thing with adding bits for specific sized filters and allowing overflow. show it breaking down. maybe a filter of 7x7 and a filter of 9x9, and add 6 more bits (handles 8x8 max)
+ * I did, but it's not looking correct
 
 * that thing about a low res SAT (bilinearly interpolated) with a high res one giving offsets
  * make sure you understand what things need to be what sizes and bit depths
